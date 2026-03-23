@@ -758,7 +758,7 @@ ifeq ($(strip $(HD44780_ENABLE)), yes)
     SRC += hd44780.c
 endif
 
-VALID_OLED_DRIVER_TYPES := custom ssd1306
+VALID_OLED_DRIVER_TYPES := custom ssd1306 sh1106
 OLED_DRIVER ?= ssd1306
 VALID_OLED_TRANSPORT_TYPES := i2c spi custom
 OLED_TRANSPORT ?= i2c
