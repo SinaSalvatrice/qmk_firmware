@@ -1,4 +1,4 @@
-name: Build 9key_makro_master olettest
+name: Build 9key_makro_master_qmk olettest
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
       contents: read
 
     env:
-      KEYBOARD: 9key_makro_master
+      KEYBOARD: 9key_makro_master_qmk
       KEYMAP: oledtest
       QMK_HOME: /tmp/qmk_firmware
 
