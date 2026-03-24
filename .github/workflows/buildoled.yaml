@@ -1,4 +1,4 @@
-name: Build 9key_makro_master_qmk bringup
+name: Build 9key_makro_master_qmk oledtest
 
 on:
   workflow_dispatch:
