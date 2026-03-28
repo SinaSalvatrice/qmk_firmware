@@ -1,0 +1,16 @@
+MCU = RP2040
+BOOTLOADER = rp2040
+PYTHON = python
+CONSOLE_ENABLE = yes
+# No ChibiOS or TMK dependencies for RP2040
+STRICT = no
+EXTRAFLAGS += -Wno-error
+
+MOUSEKEY_ENABLE = yes
+EXTRAKEY_ENABLE = yes
+ENCODER_ENABLE = no
+RGBLIGHT_ENABLE = yes
+WS2812_DRIVER = vendor
+OLED_ENABLE = no
+
+VIA_ENABLE = no
