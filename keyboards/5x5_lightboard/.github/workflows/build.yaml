@@ -34,6 +34,7 @@ jobs:
       - name: Clone QMK Firmware
         run: |
           git clone --depth 1 --filter=blob:none https://github.com/qmk/qmk_firmware.git "$QMK_HOME"
+          git config --global --add safe.directory "$QMK_HOME"
           git -C "$QMK_HOME" submodule update --init --depth 1 lib/chibios lib/chibios-contrib lib/pico-sdk lib/printf lib/lufa
           qmk config user.qmk_home="$QMK_HOME"
 
@@ -46,7 +47,6 @@ jobs:
 
       - name: Build firmware
         run: |
-          git config --global --add safe.directory "$QMK_HOME"
           cd "$QMK_HOME"
           qmk compile -kb "$KEYBOARD" -km "$KEYMAP"
 

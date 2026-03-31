@@ -1,125 +1,302 @@
 #include QMK_KEYBOARD_H
-#include "timer.h"
 #include "gpio.h"
+#include <stdio.h>
 
-bool encoder_update_user(uint8_t index, bool clockwise) {
-    (void)index;
-
-    if (clockwise) {
-        tap_code(KC_VOLU);
-    } else {
-        tap_code(KC_VOLD);
-    }
-
-    return false;
-}
-
-#ifdef RGBLIGHT_ENABLE
-void keyboard_post_init_user(void) {
-    rgblight_enable_noeeprom();
-    rgblight_mode_noeeprom(RGBLIGHT_MODE_BREATHING + 3);
-    rgblight_set_speed_noeeprom(128);
-    rgblight_sethsv_noeeprom(170, 255, 80);
-}
-#endif
-
-#ifdef OLED_ENABLE
-oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    return rotation;
-}
-
-static void render_welcome_animation(void) {
-    uint8_t frame = (timer_read32() / 500) % 4;
-
-    oled_clear();
-    switch (frame) {
-        case 0:
-            oled_set_cursor(3, 1);
-            oled_write_ln_P(PSTR("9KEY"), false);
-            oled_set_cursor(1, 3);
-            oled_write_ln_P(PSTR("MAKRO"), false);
-            oled_set_cursor(0, 5);
-            oled_write_ln_P(PSTR("MASTER"), false);
-            break;
-        case 1:
-            oled_set_cursor(1, 0);
-            oled_write_ln_P(PSTR("9key_makro"), false);
-            oled_set_cursor(2, 2);
-            oled_write_ln_P(PSTR("_master"), false);
-            oled_set_cursor(4, 5);
-            oled_write_ln_P(PSTR("hello"), false);
-            break;
-        case 2:
-            oled_set_cursor(0, 1);
-            oled_write_ln_P(PSTR("> 9key <"), false);
-            oled_set_cursor(1, 3);
-            oled_write_ln_P(PSTR("makro"), false);
-            oled_set_cursor(1, 5);
-            oled_write_ln_P(PSTR("master"), false);
-            break;
-        default:
-            oled_set_cursor(0, 1);
-            oled_write_ln_P(PSTR("WELCOME TO"), false);
-            oled_set_cursor(0, 3);
-            oled_write_ln_P(PSTR("9key_makro"), false);
-            oled_set_cursor(1, 5);
-            oled_write_ln_P(PSTR("master"), false);
-            break;
-    }
-}
-
-bool oled_task_user(void) {
-    render_welcome_animation();
-    return false;
-}
-#endif
-
+// ── Layer enum ──────────────────────────────────────────────
 enum layers {
     _BASE,
     _NAV,
     _EDIT,
     _MEDIA,
     _FN,
+    _DEV,
+    _DEV2,
     _RGB,
-    _SELECT
+    _SELECT,
+    _LAYER_COUNT  // always last
 };
 
+// ── Layer names ─────────────────────────────────────────────
+static const char *layer_name(uint8_t l) {
+    switch (l) {
+        case _BASE:   return "BASE";
+        case _NAV:    return "NAV";
+        case _EDIT:   return "EDIT";
+        case _MEDIA:  return "MEDIA";
+        case _FN:     return "FN";
+        case _DEV:    return "DEV";
+        case _DEV2:   return "DEV2";
+        case _RGB:    return "RGB";
+        case _SELECT: return "SELECT";
+        default:      return "BASE";
+    }
+}
+
+// Short label (max 6 chars) for the legend grid
+static const char *layer_name_short(uint8_t l) {
+    switch (l) {
+        case _BASE:   return "BASE";
+        case _NAV:    return "NAV";
+        case _EDIT:   return "EDIT";
+        case _MEDIA:  return "MEDIA";
+        case _FN:     return "FN";
+        case _DEV:    return "DEV";
+        case _DEV2:   return "DEV2";
+        case _RGB:    return "RGB";
+        case _SELECT: return "SEL";
+        default:      return "???";
+    }
+}
+
+// ── State tracked for OLED ──────────────────────────────────
+static uint16_t last_keycode = KC_NO;
+static uint8_t  last_row     = 0;
+static uint8_t  last_col     = 0;
+static bool     legend_active = false;
+
+static uint8_t active_layer(void) {
+    return get_highest_layer(layer_state | default_layer_state);
+}
+
+// prev / next layer (wrapping, skip _SELECT)
+static uint8_t prev_layer(uint8_t l) {
+    uint8_t p = (l == 0) ? (_SELECT - 1) : (l - 1);
+    return p;
+}
+static uint8_t next_layer(uint8_t l) {
+    uint8_t n = l + 1;
+    if (n >= _SELECT) n = 0;
+    return n;
+}
+
+// ── Keymaps ─────────────────────────────────────────────────
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
+
     [_BASE] = LAYOUT(
-        LGUI(KC_TAB),  KC_UP,    LALT(KC_TAB),
-        KC_LEFT,       KC_ENT,   KC_RGHT,
-        LCTL(KC_Z),    KC_DOWN,  LCTL(KC_R)
+        MO(_SELECT),            KC_UP,              LGUI(KC_TAB),
+        KC_LEFT,                LGUI(KC_LEFT),      KC_RGHT,
+        LCTL(KC_Z),             KC_DOWN,            LCTL(KC_R)
     ),
+
     [_NAV] = LAYOUT(
-        LGUI(KC_TAB),  KC_UP,    LALT(KC_TAB),
-        KC_LEFT,       KC_ENT,   KC_RGHT,
-        LCTL(KC_Z),    KC_DOWN,  LCTL(KC_R)
+        MO(_SELECT),            KC_UP,              LALT(KC_TAB),
+        KC_LEFT,                KC_ENT,             KC_RGHT,
+        LCTL(KC_Z),             KC_DOWN,            LCTL(KC_R)
     ),
+
     [_EDIT] = LAYOUT(
-        LCTL(KC_A),         LCTL(KC_C),   LCTL(KC_V),
-        LCTL(KC_X),         LCTL(KC_ENT), KC_NO,
-        LCTL(LSFT(KC_Z)),   KC_SPC,       KC_BSPC
+        MO(_SELECT),            LCTL(KC_C),         LCTL(KC_V),
+        LCTL(KC_X),             LCTL(KC_ENT),       KC_NO,
+        LCTL(LSFT(KC_Z)),       KC_SPC,             KC_BSPC
     ),
+
     [_MEDIA] = LAYOUT(
-        KC_MPRV,  KC_MSEL,  KC_MNXT,
-        KC_MRWD,  KC_MPLY,  KC_MFFD,
-        KC_DOWN,  KC_MSTP,  KC_UP
+        MO(_SELECT),            KC_MSEL,            KC_MNXT,
+        KC_MRWD,                KC_MPLY,            KC_MFFD,
+        KC_DOWN,                KC_MSTP,            KC_UP
     ),
+
+    [_DEV] = LAYOUT(
+        MO(_SELECT),            KC_NO,              KC_NO,
+        KC_NO,                  KC_NO,              KC_NO,
+        KC_NO,                  KC_NO,              KC_NO
+    ),
+
+    [_DEV2] = LAYOUT(
+        MO(_SELECT),            KC_NO,              KC_NO,
+        KC_NO,                  KC_NO,              KC_NO,
+        KC_NO,                  KC_NO,              KC_NO
+    ),
+
     [_FN] = LAYOUT(
-        KC_F13,  KC_F14,  KC_F15,
-        KC_F16,  KC_F17,  KC_F18,
-        KC_F19,  KC_F20,  KC_F21
+        MO(_SELECT),            KC_F14,             KC_F15,
+        KC_F16,                 KC_F17,             KC_F18,
+        KC_F19,                 KC_F20,             KC_F21
     ),
+
     [_RGB] = LAYOUT(
-        UG_SPDU,  UG_SPDD,  UG_TOGG,
-        UG_HUEU,  UG_HUED,  UG_VALU,
-        UG_SATU,  UG_SATD,  UG_VALD
+        MO(_SELECT),            UG_SPDD,            UG_TOGG,
+        UG_HUEU,                UG_HUED,            UG_VALU,
+        UG_SATU,                UG_SATD,            UG_VALD
     ),
+
     [_SELECT] = LAYOUT(
-        TO(_NAV),  TO(_EDIT),  TO(_MEDIA),
-        TO(_FN),   TO(_BASE),  KC_NO,
-        KC_NO,     KC_NO,      KC_NO
+        KC_NO,                  TO(_FN),            TO(_NAV),
+        TO(_EDIT),              TO(_MEDIA),         TO(_RGB),
+        TO(_DEV),               TO(_DEV2),          TO(_BASE)
     ),
 };
 
-// Encoder, RGB, OLED logic should be implemented here for full compatibility.
+// ── Fallback combo: R0C0 + R2C2 → _BASE ────────────────────
+static bool r0c0_held = false;
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    // Track R0C0 for fallback combo
+    if (record->event.key.row == 0 && record->event.key.col == 0) {
+        r0c0_held = record->event.pressed;
+    }
+    if (record->event.key.row == 2 && record->event.key.col == 2) {
+        if (record->event.pressed && r0c0_held) {
+            layer_move(_BASE);
+            return false;
+        }
+    }
+
+    // Track last key press for OLED display
+    if (record->event.pressed) {
+        last_keycode = keycode;
+        last_row     = record->event.key.row;
+        last_col     = record->event.key.col;
+    }
+
+    return true;
+}
+
+// ── Encoder: volume (normal) ────────────────────────────────
+bool encoder_update_user(uint8_t index, bool clockwise) {
+    (void)index;
+    if (clockwise) {
+        tap_code(KC_VOLU);
+    } else {
+        tap_code(KC_VOLD);
+    }
+    return false;
+}
+
+// ── Encoder button via matrix_scan (GP10) ───────────────────
+void matrix_scan_user(void) {
+    static bool was_pressed = false;
+    bool        pressed     = (gpio_read_pin(ENCODER_BTN_PIN) == 0);
+
+    if (pressed && !was_pressed) {
+        legend_active = !legend_active;  // toggle legend on press
+    }
+    was_pressed = pressed;
+}
+
+// ── Init ────────────────────────────────────────────────────
+void keyboard_post_init_user(void) {
+#ifdef RGBLIGHT_ENABLE
+    rgblight_enable_noeeprom();
+    rgblight_mode_noeeprom(RGBLIGHT_MODE_BREATHING + 3);
+    rgblight_set_speed_noeeprom(128);
+    rgblight_sethsv_noeeprom(170, 255, 80);
+#endif
+
+    gpio_set_pin_output(GP25);
+    gpio_write_pin_high(GP25);
+
+    gpio_set_pin_input_high(ENCODER_BTN_PIN);
+}
+
+// ── OLED ────────────────────────────────────────────────────
+#ifdef OLED_ENABLE
+
+oled_rotation_t oled_init_user(oled_rotation_t rotation) {
+    return rotation;
+}
+
+// Write exactly 21 chars to one row — no stale pixels possible.
+static void write_line(uint8_t row, const char *str) {
+    char buf[22];
+    snprintf(buf, sizeof(buf), "%-21.21s", str);
+    oled_set_cursor(0, row);
+    oled_write(buf, false);
+}
+
+// ── Boot animation ───────────────────────────────────────────
+static uint32_t boot_start = 0;
+#define BOOT_TOTAL_MS 2800
+
+static void render_boot(void) {
+    if (boot_start == 0) boot_start = timer_read32() | 1;
+    uint32_t t = timer_elapsed32(boot_start);
+
+    // All 8 rows written every frame — no leftover pixels
+    write_line(0, "");
+    write_line(1, "");
+    write_line(2, t >=  800 ? "          I AM" : "             I");
+    write_line(3, t >= 1200 ? "          ROOT" : "");
+    write_line(4, "");
+    write_line(6, "");
+    write_line(7, "");
+}
+
+// ── Key label (max buflen-1 chars) ──────────────────────────
+static void get_key_label(uint16_t kc, char *buf, uint8_t buflen) {
+    if (kc == MO(_SELECT)) {
+        snprintf(buf, buflen, "SEL");
+        return;
+    }
+    const char *s = get_keycode_string(kc);
+    if (s[0] == 'K' && s[1] == 'C' && s[2] == '_') s += 3;
+    snprintf(buf, buflen, "%.*s", buflen - 1, s);
+}
+
+// ── Layer header (row 0): prev [CUR] next ───────────────────
+static void render_header(uint8_t layer) {
+    char line[22];
+    const char *p = layer_name_short(prev_layer(layer));
+    const char *c = layer_name_short(layer);
+    const char *n = layer_name_short(next_layer(layer));
+    snprintf(line, sizeof(line), "%-5s [%-5s] %-5s", p, c, n);
+    write_line(0, line);
+}
+
+// ── Normal view: last key info (rows 1–7) ───────────────────
+static void render_keyinfo(void) {
+    char buf[22];
+    char label[15];
+    get_key_label(last_keycode, label, sizeof(label));
+
+    write_line(1, "---------------------");
+    snprintf(buf, sizeof(buf), "Key:  %.14s", label);
+    write_line(2, buf);
+    snprintf(buf, sizeof(buf), "Code: 0x%04X", last_keycode);
+    write_line(3, buf);
+    snprintf(buf, sizeof(buf), "Pos:  R%uC%u", last_row, last_col);
+    write_line(4, buf);
+    write_line(5, "");
+    write_line(6, "");
+    write_line(7, "");
+}
+
+// ── Legend view: 3×3 key grid (rows 1–7) ────────────────────
+static void render_legend(uint8_t layer) {
+    char line[22];
+    write_line(1, "---------------------");
+
+    for (uint8_t r = 0; r < MATRIX_ROWS; r++) {
+        char l0[8], l1[8], l2[8];
+        get_key_label(keymaps[layer][r][0], l0, sizeof(l0));
+        get_key_label(keymaps[layer][r][1], l1, sizeof(l1));
+        get_key_label(keymaps[layer][r][2], l2, sizeof(l2));
+        snprintf(line, sizeof(line), "%-7s%-7s%-7s", l0, l1, l2);
+        write_line(2 + r, line);
+    }
+
+    write_line(5, "  [Enc btn]=toggle");
+    write_line(6, "");
+    write_line(7, "");
+}
+
+// ── Main OLED task ──────────────────────────────────────────
+bool oled_task_user(void) {
+    if (boot_start == 0 || timer_elapsed32(boot_start) < BOOT_TOTAL_MS) {
+        render_boot();
+        return false;
+    }
+
+    uint8_t cur = active_layer();
+    render_header(cur);
+
+    if (legend_active) {
+        render_legend(cur);
+    } else {
+        render_keyinfo();
+    }
+
+    return false;
+}
+
+#endif // OLED_ENABLE

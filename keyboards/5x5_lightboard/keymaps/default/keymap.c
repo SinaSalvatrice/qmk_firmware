@@ -1,4 +1,4 @@
-#include "qmk_keyboard.h"
+#include QMK_KEYBOARD_H
 #include "timer.h"
 #include "gpio.h"
 
